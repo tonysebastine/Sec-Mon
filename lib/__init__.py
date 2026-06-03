@@ -1,0 +1,1 @@
+# Security Monitor - core library package

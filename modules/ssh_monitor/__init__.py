@@ -1,0 +1,1 @@
+# Security Monitor - SSH log ingestion module

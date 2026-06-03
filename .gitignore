@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Plugin runtime artifacts
+config/config.json
+logs/*.log
+logs/*.log.*
+data/*.json
+data/*.dat
+data/*.db
+data/offsets/
+*.pid
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets (never commit)
+.env
+*.secret
+secrets.json
+credentials.json

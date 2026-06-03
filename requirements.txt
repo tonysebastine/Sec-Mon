@@ -1,0 +1,13 @@
+# Security Monitor - Python dependencies
+#
+# Kept minimal: most of the plugin uses the Python standard library.
+# PyMySQL is the MariaDB/MySQL driver of choice because it is pure Python
+# (no native compilation) and is already shipped with aaPanel's panel env.
+#
+# Pin to compatible major versions; aaPanel's bundled Python is 3.7+.
+
+PyMySQL>=1.0.0,<2.0.0
+# requests is used by the Discord webhook and Telegram notifier in Phase 12
+requests>=2.28.0
+# python-dateutil for forgiving log timestamp parsing
+python-dateutil>=2.8.0

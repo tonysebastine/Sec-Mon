@@ -1,0 +1,141 @@
+{
+  "_comment": "Security Monitor default configuration. Edit config/config.json (auto-generated) to override.",
+
+  "database": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "name": "sec_mon",
+    "user": "",
+    "password": "",
+    "charset": "utf8mb4",
+    "pool_size": 5,
+    "pool_recycle": 3600,
+    "connect_timeout": 10
+  },
+
+  "ssh_monitor": {
+    "enabled": true,
+    "log_path": "/var/log/auth.log",
+    "alternate_log_paths": [
+      "/var/log/secure"
+    ],
+    "journal_fallback": true,
+    "journal_unit": "sshd",
+    "poll_interval": 30,
+    "max_lines_per_poll": 5000,
+    "lookback_lines": 200,
+    "dedup_window_seconds": 60
+  },
+
+  "session_monitor": {
+    "enabled": true,
+    "poll_interval": 30,
+    "sudoers_paths": [
+      "/var/log/auth.log"
+    ]
+  },
+
+  "fail2ban": {
+    "enabled": true,
+    "log_path": "/var/log/fail2ban.log",
+    "socket_path": "/var/run/fail2ban/fail2ban.sock",
+    "poll_interval": 60
+  },
+
+  "ssl_monitor": {
+    "enabled": true,
+    "scan_paths": [
+      "/www/server/panel/vhost/cert",
+      "/etc/letsencrypt/live",
+      "/etc/ssl/certs"
+    ],
+    "warn_days": 30,
+    "critical_days": 7,
+    "scan_interval": 3600
+  },
+
+  "services": {
+    "enabled": true,
+    "poll_interval": 60,
+    "watched": [
+      {"name": "sshd",     "unit": "sshd",     "type": "systemd"},
+      {"name": "ssh",      "unit": "ssh",      "type": "systemd"},
+      {"name": "fail2ban", "unit": "fail2ban", "type": "systemd"},
+      {"name": "mariadb",  "unit": "mariadb",  "type": "systemd"},
+      {"name": "mysql",    "unit": "mysql",    "type": "systemd"},
+      {"name": "nginx",    "unit": "nginx",    "type": "systemd"},
+      {"name": "apache2",  "unit": "apache2",  "type": "systemd"}
+    ]
+  },
+
+  "geolocation": {
+    "enabled": false,
+    "provider": "maxmind",
+    "database_path": "data/GeoLite2-City.mmdb",
+    "asn_database_path": "data/GeoLite2-ASN.mmdb",
+    "license_key": "",
+    "cache_ttl_days": 30
+  },
+
+  "alerts": {
+    "enabled": true,
+    "rules": {
+      "failed_root_login":      {"enabled": true,  "threshold": 1, "window_minutes": 60},
+      "successful_root_login":  {"enabled": true},
+      "new_country_login":      {"enabled": true},
+      "brute_force":            {"enabled": true,  "threshold": 10, "window_minutes": 5},
+      "ssl_expiring_7d":        {"enabled": true},
+      "ssl_expiring_30d":       {"enabled": true},
+      "fail2ban_ban":           {"enabled": true},
+      "service_down":           {"enabled": true}
+    }
+  },
+
+  "notifications": {
+    "telegram": {
+      "enabled": false,
+      "bot_token": "",
+      "chat_id": ""
+    },
+    "discord": {
+      "enabled": false,
+      "webhook_url": ""
+    },
+    "email": {
+      "enabled": false,
+      "smtp_host": "",
+      "smtp_port": 587,
+      "smtp_user": "",
+      "smtp_password": "",
+      "smtp_tls": true,
+      "from_addr": "",
+      "to_addrs": []
+    }
+  },
+
+  "logging": {
+    "level": "INFO",
+    "log_dir": "logs",
+    "max_bytes": 10485760,
+    "backup_count": 5,
+    "console": false
+  },
+
+  "retention": {
+    "events_days": 90,
+    "alerts_days": 90,
+    "log_offsets_prune_days": 30
+  },
+
+  "daemon": {
+    "enabled": true,
+    "pid_file": "data/sec_mon.pid",
+    "tasks": {
+      "fast_poll":     30,
+      "slow_poll":     300,
+      "ssl_check":     3600,
+      "geo_update":    86400,
+      "cleanup":       86400
+    }
+  }
+}

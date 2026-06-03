@@ -1,0 +1,99 @@
+{
+  "name": "sec_mon",
+  "title": "Security Monitor",
+  "version": "1.0.0",
+  "description": "SSH authentication, session, Fail2Ban, SSL, and service health monitoring with Telegram/Discord/Email alerts for aaPanel.",
+  "author": "Security Monitor Team",
+  "author_email": "ops@thbz,in",
+  "homepage": "https://example.com/sec_mon",
+  "help": "https://example.com/sec_mon/docs",
+  "checksum": "",
+  "os": "Linux",
+  "platform": "Debian",
+  "panel_version": "8.0.3",
+  "python_version": "3.7+",
+  "authoritative": false,
+  "encrypted": false,
+  "root": true,
+  "type": "monitoring",
+  "category": "security",
+  "tags": ["security", "ssh", "fail2ban", "ssl", "monitoring", "alerting"],
+  "permissions": [
+    "read /var/log/auth.log",
+    "read /var/log/fail2ban.log",
+    "execute systemctl/fail2ban-client",
+    "read /etc/ssl certificates",
+    "write to plugin config and logs directory",
+    "create MariaDB database sec_mon"
+  ],
+  "menu": {
+    "top": {
+      "title": "Security Monitor",
+      "ico": "fa-shield",
+      "url": "index"
+    },
+    "menu": [
+      {
+        "title": "Dashboard",
+        "ico": "fa-dashboard",
+        "path": "dashboard"
+      },
+      {
+        "title": "Events",
+        "ico": "fa-list",
+        "path": "events"
+      },
+      {
+        "title": "Sessions",
+        "ico": "fa-users",
+        "path": "sessions"
+      },
+      {
+        "title": "Fail2Ban",
+        "ico": "fa-ban",
+        "path": "fail2ban"
+      },
+      {
+        "title": "SSL Certificates",
+        "ico": "fa-lock",
+        "path": "ssl"
+      },
+      {
+        "title": "Services",
+        "ico": "fa-cogs",
+        "path": "services"
+      },
+      {
+        "title": "Analytics",
+        "ico": "fa-line-chart",
+        "path": "analytics"
+      },
+      {
+        "title": "Alerts",
+        "ico": "fa-bell",
+        "path": "alerts"
+      },
+      {
+        "title": "Settings",
+        "ico": "fa-cog",
+        "path": "settings"
+      }
+    ]
+  },
+  "dependencies": {
+    "python": [
+      "PyMySQL>=1.0.0",
+      "requests>=2.28.0",
+      "python-dateutil>=2.8.0"
+    ],
+    "system": [
+      "python3",
+      "python3-pip"
+    ]
+  },
+  "config": {
+    "database": "sec_mon",
+    "log_dir": "logs",
+    "data_dir": "data"
+  }
+}
