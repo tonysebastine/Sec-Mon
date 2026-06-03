@@ -408,6 +408,97 @@ class sec_mon_main:
         return _json_ok(get_service_stats())
 
     # ------------------------------------------------------------------
+    # Alert engine (Phase 11)
+    # ------------------------------------------------------------------
+
+    def api_alerts(self, args: dict = {}) -> str:
+        """List recent alerts."""
+        from modules.alerts.engine import get_recent_alerts  # noqa: PLC0415
+        p = _get_args(args)
+        limit = min(200, max(1, int(p.get("limit", 50))))
+        severity = p.get("severity")
+        return _json_ok(get_recent_alerts(limit, severity=severity))
+
+    def api_alert_stats(self, args: dict = {}) -> str:
+        """Alert statistics."""
+        from modules.alerts.engine import get_alert_stats  # noqa: PLC0415
+        return _json_ok(get_alert_stats())
+
+    def api_alert_run(self, args: dict = {}) -> str:
+        """Run alert rules manually."""
+        from modules.alerts.engine import run_rules  # noqa: PLC0415
+        return _json_ok(run_rules())
+
+    def api_alert_ack(self, args: dict = {}) -> str:
+        """Acknowledge an alert."""
+        from modules.alerts.engine import acknowledge_alert  # noqa: PLC0415
+        p = _get_args(args)
+        alert_id = p.get("id")
+        if not alert_id:
+            return _json_err("Missing 'id'")
+        ok = acknowledge_alert(int(alert_id))
+        return _json_ok({"acknowledged": ok})
+
+    # ------------------------------------------------------------------
+    # Notifications (Phase 12)
+    # ------------------------------------------------------------------
+
+    def api_notifications_queue(self, args: dict = {}) -> str:
+        """Process pending notifications."""
+        from modules.notifications.notifier import process_queue  # noqa: PLC0415
+        return _json_ok(process_queue())
+
+    def api_notifications_stats(self, args: dict = {}) -> str:
+        """Notification queue statistics."""
+        from modules.notifications.notifier import get_queue_stats  # noqa: PLC0415
+        return _json_ok(get_queue_stats())
+
+    def api_notifications_test(self, args: dict = {}) -> str:
+        """Test a notification channel."""
+        from modules.notifications.notifier import test_channel  # noqa: PLC0415
+        p = _get_args(args)
+        channel = p.get("channel", "")
+        if not channel:
+            return _json_err("Missing 'channel' (telegram|discord|email)")
+        return _json_ok(test_channel(channel))
+
+    # ------------------------------------------------------------------
+    # Daemon control (Phase 18)
+    # ------------------------------------------------------------------
+
+    def api_daemon_start(self, args: dict = {}) -> str:
+        """Start the background daemon."""
+        import subprocess  # noqa: PLC0415
+        py_bin = sys.executable
+        script = os.path.join(PLUGIN_DIR, "modules", "daemon", "scheduler.py")
+        try:
+            subprocess.Popen(
+                [py_bin, script],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            return _json_ok({"message": "Daemon started"})
+        except Exception as exc:
+            return _json_err(str(exc))
+
+    def api_daemon_status(self, args: dict = {}) -> str:
+        """Check daemon status."""
+        cfg = Config()
+        pid_path = os.path.join(PLUGIN_DIR, cfg.get("daemon.pid_file", "data/sec_mon.pid"))
+        running = False
+        pid = None
+        if os.path.isfile(pid_path):
+            try:
+                with open(pid_path, "r") as f:
+                    pid = int(f.read().strip())
+                os.kill(pid, 0)
+                running = True
+            except (OSError, ValueError):
+                running = False
+        return _json_ok({"running": running, "pid": pid})
+
+    # ------------------------------------------------------------------
     # Heartbeat / keep-alive
     # ------------------------------------------------------------------
 
