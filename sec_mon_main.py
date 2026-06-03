@@ -265,6 +265,149 @@ class sec_mon_main:
         return _json_ok(rows)
 
     # ------------------------------------------------------------------
+    # Session monitoring (Phase 4-5)
+    # ------------------------------------------------------------------
+
+    def api_sessions(self, args: dict = {}) -> str:
+        """List recent session/sudo/su events."""
+        from modules.session_monitor.tracker import get_recent_sessions  # noqa: PLC0415
+        p = _get_args(args)
+        limit = min(200, max(1, int(p.get("limit", 50))))
+        return _json_ok(get_recent_sessions(limit))
+
+    def api_active_sessions(self, args: dict = {}) -> str:
+        """Get currently active SSH sessions (who/w)."""
+        from modules.session_monitor.active import get_active_sessions  # noqa: PLC0415
+        return _json_ok(get_active_sessions())
+
+    def api_session_stats(self, args: dict = {}) -> str:
+        """Aggregate session statistics."""
+        from modules.session_monitor.tracker import get_session_stats  # noqa: PLC0415
+        return _json_ok(get_session_stats())
+
+    # ------------------------------------------------------------------
+    # Geolocation (Phase 6)
+    # ------------------------------------------------------------------
+
+    def api_geo_lookup(self, args: dict = {}) -> str:
+        """Look up geographic information for an IP address."""
+        from modules.geolocation.lookup import lookup_ip  # noqa: PLC0415
+        p = _get_args(args)
+        ip = p.get("ip", "")
+        if not ip:
+            return _json_err("Missing 'ip' parameter")
+        result = lookup_ip(ip)
+        return _json_ok(result.as_dict())
+
+    def api_geo_status(self, args: dict = {}) -> str:
+        """Geolocation engine status."""
+        from modules.geolocation.lookup import get_status  # noqa: PLC0415
+        return _json_ok(get_status())
+
+    # ------------------------------------------------------------------
+    # Attack intelligence (Phase 7)
+    # ------------------------------------------------------------------
+
+    def api_attack_summary(self, args: dict = {}) -> str:
+        """High-level attack summary."""
+        from modules.ssh_monitor.analytics import get_attack_summary  # noqa: PLC0415
+        return _json_ok(get_attack_summary())
+
+    def api_top_attackers(self, args: dict = {}) -> str:
+        """Return top attackers by total attempts."""
+        from modules.ssh_monitor.analytics import get_top_attackers  # noqa: PLC0415
+        p = _get_args(args)
+        limit = min(100, max(1, int(p.get("limit", 25))))
+        return _json_ok(get_top_attackers(limit))
+
+    def api_most_targeted_users(self, args: dict = {}) -> str:
+        """Return users targeted by the most unique IPs."""
+        from modules.ssh_monitor.analytics import get_most_targeted_users  # noqa: PLC0415
+        return _json_ok(get_most_targeted_users())
+
+    def api_login_trends(self, args: dict = {}) -> str:
+        """Daily login trends."""
+        from modules.ssh_monitor.analytics import get_login_trends  # noqa: PLC0415
+        p = _get_args(args)
+        days = min(90, max(1, int(p.get("days", 7))))
+        return _json_ok(get_login_trends(days))
+
+    def api_hourly_logins(self, args: dict = {}) -> str:
+        """Per-hour login counts."""
+        from modules.ssh_monitor.analytics import get_failed_logins_per_hour  # noqa: PLC0415
+        from modules.ssh_monitor.analytics import get_successful_logins_per_hour  # noqa: PLC0415
+        p = _get_args(args)
+        hours = min(168, max(1, int(p.get("hours", 24))))
+        return _json_ok({
+            "failed": get_failed_logins_per_hour(hours),
+            "successful": get_successful_logins_per_hour(hours),
+        })
+
+    # ------------------------------------------------------------------
+    # Fail2Ban (Phase 8)
+    # ------------------------------------------------------------------
+
+    def api_fail2ban_collect(self, args: dict = {}) -> str:
+        """Run a Fail2Ban collection cycle."""
+        from modules.fail2ban.collector import collect  # noqa: PLC0415
+        return _json_ok(collect())
+
+    def api_fail2ban_jails(self, args: dict = {}) -> str:
+        """List Fail2Ban jails."""
+        from modules.fail2ban.collector import get_all_jails  # noqa: PLC0415
+        return _json_ok(get_all_jails())
+
+    def api_fail2ban_bans(self, args: dict = {}) -> str:
+        """Recent ban events."""
+        from modules.fail2ban.collector import get_recent_bans  # noqa: PLC0415
+        p = _get_args(args)
+        limit = min(200, max(1, int(p.get("limit", 50))))
+        return _json_ok(get_recent_bans(limit))
+
+    def api_fail2ban_stats(self, args: dict = {}) -> str:
+        """Fail2Ban aggregate statistics."""
+        from modules.fail2ban.collector import get_f2b_stats  # noqa: PLC0415
+        return _json_ok(get_f2b_stats())
+
+    # ------------------------------------------------------------------
+    # SSL certificates (Phase 9)
+    # ------------------------------------------------------------------
+
+    def api_ssl_scan(self, args: dict = {}) -> str:
+        """Run an SSL certificate scan."""
+        from modules.ssl_monitor.scanner import scan  # noqa: PLC0415
+        return _json_ok(scan())
+
+    def api_ssl_certificates(self, args: dict = {}) -> str:
+        """List discovered certificates."""
+        from modules.ssl_monitor.scanner import get_certificates  # noqa: PLC0415
+        return _json_ok(get_certificates())
+
+    def api_ssl_stats(self, args: dict = {}) -> str:
+        """SSL certificate statistics."""
+        from modules.ssl_monitor.scanner import get_certificate_stats  # noqa: PLC0415
+        return _json_ok(get_certificate_stats())
+
+    # ------------------------------------------------------------------
+    # Services (Phase 10)
+    # ------------------------------------------------------------------
+
+    def api_services_collect(self, args: dict = {}) -> str:
+        """Check all services and store status."""
+        from modules.service_monitor.checker import collect  # noqa: PLC0415
+        return _json_ok(collect())
+
+    def api_services_status(self, args: dict = {}) -> str:
+        """Get latest service status."""
+        from modules.service_monitor.checker import get_service_status  # noqa: PLC0415
+        return _json_ok(get_service_status())
+
+    def api_services_stats(self, args: dict = {}) -> str:
+        """Aggregate service statistics."""
+        from modules.service_monitor.checker import get_service_stats  # noqa: PLC0415
+        return _json_ok(get_service_stats())
+
+    # ------------------------------------------------------------------
     # Heartbeat / keep-alive
     # ------------------------------------------------------------------
 

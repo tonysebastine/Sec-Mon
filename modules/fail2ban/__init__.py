@@ -1,0 +1,1 @@
+# Security Monitor - Fail2Ban monitoring module
