@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-Security-Monitor" content="no-cache">
+    <title>Security Monitor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; }
+        .header { background: #1a1a2e; color: #fff; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 18px; font-weight: 600; }
+        .header .status { font-size: 13px; opacity: 0.8; }
+        .header .status.ok { color: #4caf50; }
+        .header .status.err { color: #f44336; }
+        .layout { display: flex; min-height: calc(100vh - 50px); }
+        .sidebar { width: 220px; background: #16213e; padding: 16px 0; flex-shrink: 0; }
+        .sidebar a { display: block; padding: 10px 20px; color: #a0aec0; text-decoration: none; font-size: 14px; transition: all .2s; }
+        .sidebar a:hover, .sidebar a.active { background: #1a1a2e; color: #fff; }
+        .sidebar a i { width: 20px; margin-right: 10px; text-align: center; }
+        .main { flex: 1; padding: 24px; overflow-y: auto; }
+        .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.1); padding: 20px; margin-bottom: 20px; }
+        .card h2 { font-size: 16px; margin-bottom: 16px; color: #1a1a2e; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .kpi { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); text-align: center; }
+        .kpi .value { font-size: 28px; font-weight: 700; margin: 8px 0; }
+        .kpi .label { font-size: 12px; color: #666; text-transform: uppercase; }
+        .kpi.success .value { color: #4caf50; }
+        .kpi.warning .value { color: #ff9800; }
+        .kpi.danger .value { color: #f44336; }
+        .kpi.info .value { color: #2196f3; }
+        .events-table { width: 100%; border-collapse: collapse; }
+        .events-table th, .events-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; }
+        .events-table th { background: #f8f9fa; font-weight: 600; color: #555; }
+        .events-table tr:hover { background: #f5f5f5; }
+        .badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge.success { background: #e8f5e9; color: #2e7d32; }
+        .badge.danger { background: #ffebee; color: #c62828; }
+        .badge.warning { background: #fff3e0; color: #e65100; }
+        .badge.info { background: #e3f2fd; color: #1565c0; }
+        .badge.neutral { background: #f5f5f5; color: #555; }
+        .refresh-indicator { font-size: 12px; color: #999; text-align: right; margin-top: 8px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><i class="fas fa-shield-alt"></i> Security Monitor v1.0</h1>
+        <div class="status" id="header-status">Connecting...</div>
+    </div>
+    <div class="layout">
+        <div class="sidebar">
+            <a href="#" class="active" onclick="showPage('dashboard')"><i class="fas fa-tachometer-alt"></i>Dashboard</a>
+            <a href="#" onclick="showPage('events')"><i class="fas fa-list"></i>Events</a>
+            <a href="#" onclick="showPage('sessions')"><i class="fas fa-users"></i>Sessions</a>
+            <a href="#" onclick="showPage('fail2ban')"><i class="fas fa-ban"></i>Fail2Ban</a>
+            <a href="#" onclick="showPage('ssl')"><i class="fas fa-lock"></i>SSL Certs</a>
+            <a href="#" onclick="showPage('services')"><i class="fas fa-cogs"></i>Services</a>
+            <a href="#" onclick="showPage('analytics')"><i class="fas fa-chart-line"></i>Analytics</a>
+            <a href="#" onclick="showPage('alerts')"><i class="fas fa-bell"></i>Alerts</a>
+            <a href="#" onclick="showPage('settings')"><i class="fas fa-cog"></i>Settings</a>
+        </div>
+        <div class="main" id="main-content">
+            <!-- Pages loaded dynamically -->
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script>
+        const API = window.location.pathname.replace(/\/$/, '') + '?action=';
+
+        async function apiCall(action, params = {}) {
+            try {
+                const resp = await fetch(API + action, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'params=' + encodeURIComponent(JSON.stringify(params))
+                });
+                return await resp.json();
+            } catch (e) {
+                return {status: -1, msg: e.message};
+            }
+        }
+
+        function showPage(page) {
+            document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+            event.target.closest('a').classList.add('active');
+            const main = document.getElementById('main-content');
+            main.innerHTML = '<div style="text-align:center;padding:40px;color:#999"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+            loadPage(page, main);
+        }
+
+        async function loadPage(page, container) {
+            const res = await apiCall('api_event_stats');
+            switch(page) {
+                case 'dashboard': renderDashboard(container); break;
+                case 'events': renderEvents(container); break;
+                case 'alerts': renderAlerts(container); break;
+                case 'services': renderServices(container); break;
+                default: container.innerHTML = '<div class="card"><h2>' + page + '</h2><p>Page under development.</p></div>';
+            }
+        }
+
+        async function renderDashboard(el) {
+            const res = await apiCall('api_event_stats');
+            const s = res.data || {};
+            el.innerHTML = `
+                <div class="kpi-grid">
+                    <div class="kpi danger"><div class="value">${s['login.failure']||0}</div><div class="label">Failed Logins (24h)</div></div>
+                    <div class="kpi success"><div class="value">${s['login.success']||0}</div><div class="label">Successful Logins</div></div>
+                    <div class="kpi danger"><div class="value">${s['login.root']||0}</div><div class="label">Root Logins</div></div>
+                    <div class="kpi info"><div class="value">${s['unique_ips_24h']||0}</div><div class="label">Unique IPs</div></div>
+                    <div class="kpi warning"><div class="value">${s['sudo.command']||0}</div><div class="label">Sudo Commands</div></div>
+                    <div class="kpi info"><div class="value">${s.total_events||0}</div><div class="label">Total Events</div></div>
+                </div>
+                <div class="card"><h2><i class="fas fa-clock"></i> Recent Events</h2>
+                    <div id="recent-events"></div>
+                </div>
+            `;
+            const evRes = await apiCall('api_events', {limit: 15});
+            const events = (evRes.data && evRes.data.events) || [];
+            let html = '<table class="events-table"><thead><tr><th>Time</th><th>Type</th><th>User</th><th>IP</th><th>Message</th></tr></thead><tbody>';
+            events.forEach(e => {
+                const badge = e.event_type.includes('failure') || e.event_type.includes('root') ? 'danger' :
+                              e.event_type.includes('success') ? 'success' : 'neutral';
+                html += `<tr><td>${e.timestamp||''}</td><td><span class="badge ${badge}">${e.event_type}</span></td>
+                         <td>${e.username||'-'}</td><td>${e.ip_address||'-'}</td><td>${e.message||''}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('recent-events').innerHTML = html;
+        }
+
+        async function renderEvents(el) {
+            const res = await apiCall('api_events', {limit: 50});
+            const events = (res.data && res.data.events) || [];
+            let html = '<div class="card"><h2><i class="fas fa-list"></i> All Events (' + (res.data?.total||0) + ')</h2>';
+            html += '<table class="events-table"><thead><tr><th>Time</th><th>Type</th><th>User</th><th>IP</th><th>Port</th><th>Message</th></tr></thead><tbody>';
+            events.forEach(e => {
+                const badge = e.event_type.includes('failure') || e.event_type.includes('root') ? 'danger' :
+                              e.event_type.includes('success') ? 'success' : 'info';
+                html += `<tr><td>${e.timestamp||''}</td><td><span class="badge ${badge}">${e.event_type}</span></td>
+                         <td>${e.username||'-'}</td><td>${e.ip_address||'-'}</td><td>${e.port||'-'}</td><td>${e.message||''}</td></tr>`;
+            });
+            html += '</tbody></table></div>';
+            el.innerHTML = html;
+        }
+
+        async function renderAlerts(el) {
+            const res = await apiCall('api_alerts', {limit: 30});
+            const alerts = res.data || [];
+            let html = '<div class="card"><h2><i class="fas fa-bell"></i> Recent Alerts</h2>';
+            if (alerts.length === 0) {
+                html += '<p style="color:#999;text-align:center;padding:20px">No alerts generated yet.</p>';
+            } else {
+                html += '<table class="events-table"><thead><tr><th>Time</th><th>Severity</th><th>Title</th><th>Rule</th></tr></thead><tbody>';
+                alerts.forEach(a => {
+                    const badge = a.severity === 'critical' ? 'danger' : a.severity === 'warning' ? 'warning' : 'info';
+                    html += `<tr><td>${a.created_at||''}</td><td><span class="badge ${badge}">${a.severity}</span></td>
+                             <td>${a.title||''}</td><td>${a.rule_id||''}</td></tr>`;
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+            el.innerHTML = html;
+        }
+
+        async function renderServices(el) {
+            const res = await apiCall('api_services_status');
+            const svcs = res.data || [];
+            let html = '<div class="card"><h2><i class="fas fa-cogs"></i> Service Status</h2>';
+            if (svcs.length === 0) {
+                html += '<p style="color:#999;text-align:center;padding:20px">No service data. Click "Collect" to check.</p>';
+            } else {
+                html += '<table class="events-table"><thead><tr><th>Service</th><th>Status</th><th>PID</th><th>Memory</th></tr></thead><tbody>';
+                svcs.forEach(s => {
+                    const badge = s.status === 'running' ? 'success' : s.status === 'failed' ? 'danger' : 'warning';
+                    const mem = s.memory_kb ? Math.round(s.memory_kb/1024) + ' MB' : '-';
+                    html += `<tr><td>${s.service_name||''}</td><td><span class="badge ${badge}">${s.status}</span></td>
+                             <td>${s.pid||'-'}</td><td>${mem}</td></tr>`;
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+            el.innerHTML = html;
+        }
+
+        // Status check on load
+        async function checkStatus() {
+            const res = await apiCall('api_status');
+            const el = document.getElementById('header-status');
+            if (res.status === 0) {
+                el.className = 'status ok';
+                el.textContent = 'Connected | ' + (res.data?.server_time || '');
+            } else {
+                el.className = 'status err';
+                el.textContent = 'Disconnected';
+            }
+        }
+
+        // Auto-refresh every 30s
+        setInterval(checkStatus, 30000);
+
+        // Initial load
+        checkStatus();
+        loadPage('dashboard', document.getElementById('main-content'));
+    </script>
+</body>
+</html>
