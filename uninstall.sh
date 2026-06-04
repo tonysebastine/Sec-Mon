@@ -95,20 +95,30 @@ drop_database() {
     log "Dropping MariaDB database '${PLUGIN_NAME}'..."
     DB_USER="${DB_USER}" DB_PASS="${DB_PASS}" "${PY_BIN}" - <<PYEOF
 import pymysql, os, sys
-try:
-    conn = pymysql.connect(host=os.environ.get("DB_HOST","127.0.0.1"),
-                           port=int(os.environ.get("DB_PORT","3306")),
-                           user=os.environ.get("DB_USER","root"),
-                           password=os.environ.get("DB_PASS",""),
-                           charset="utf8mb4")
-    with conn.cursor() as c:
-        c.execute(f"DROP DATABASE IF EXISTS \`${PLUGIN_NAME}\`;")
-    conn.commit()
-    conn.close()
-    print("OK")
-except Exception as e:
-    print(f"ERR: {e}", file=sys.stderr)
-    sys.exit(1)
+host = os.environ.get("DB_HOST", "127.0.0.1")
+port = int(os.environ.get("DB_PORT", "3306"))
+user = os.environ.get("DB_USER", "root")
+password = os.environ.get("DB_PASS", "")
+for attempt in [
+    {"host": host, "port": port, "user": user, "password": password},
+    {"unix_socket": "/var/run/mysqld/mysqld.sock", "user": user, "password": password},
+    {"unix_socket": "/var/run/mysqld/mysqld.sock", "user": user, "password": ""},
+    {"unix_socket": "/var/run/mysqld/mysqld.sock", "user": "root", "password": ""},
+    {"unix_socket": "/tmp/mysql.sock", "user": "root", "password": ""},
+    {"host": "localhost", "user": "root", "password": ""},
+]:
+    try:
+        conn = pymysql.connect(charset="utf8mb4", **attempt)
+        with conn.cursor() as c:
+            c.execute(f"DROP DATABASE IF EXISTS \`${PLUGIN_NAME}\`;")
+        conn.commit()
+        conn.close()
+        print("OK")
+        sys.exit(0)
+    except Exception as e:
+        continue
+print("All connection attempts failed", file=sys.stderr)
+sys.exit(1)
 PYEOF
 }
 

@@ -175,21 +175,34 @@ create_database() {
     log "Creating MariaDB database '${PLUGIN_NAME}'..."
     DB_USER="${DB_USER}" DB_PASS="${DB_PASS}" "${PY_BIN}" - <<PYEOF
 import pymysql, os, sys
-try:
-    conn = pymysql.connect(host=os.environ.get("DB_HOST","127.0.0.1"),
-                           port=int(os.environ.get("DB_PORT","3306")),
-                           user=os.environ.get("DB_USER","root"),
-                           password=os.environ.get("DB_PASS",""),
-                           charset="utf8mb4")
-    with conn.cursor() as c:
-        c.execute(f"CREATE DATABASE IF NOT EXISTS \`${PLUGIN_NAME}\` "
-                  f"CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
-    conn.commit()
-    conn.close()
-    print("OK")
-except Exception as e:
-    print(f"ERR: {e}", file=sys.stderr)
-    sys.exit(1)
+host = os.environ.get("DB_HOST", "127.0.0.1")
+port = int(os.environ.get("DB_PORT", "3306"))
+user = os.environ.get("DB_USER", "root")
+password = os.environ.get("DB_PASS", "")
+errors = []
+for attempt in [
+    {"host": host, "port": port, "user": user, "password": password},
+    {"unix_socket": "/var/run/mysqld/mysqld.sock", "user": user, "password": password},
+    {"unix_socket": "/var/run/mysqld/mysqld.sock", "user": user, "password": ""},
+    {"unix_socket": "/var/run/mysqld/mysqld.sock", "user": "root", "password": ""},
+    {"unix_socket": "/tmp/mysql.sock", "user": "root", "password": ""},
+    {"host": "localhost", "user": "root", "password": ""},
+]:
+    try:
+        conn = pymysql.connect(charset="utf8mb4", **attempt)
+        with conn.cursor() as c:
+            c.execute(f"CREATE DATABASE IF NOT EXISTS \`${PLUGIN_NAME}\` "
+                      f"CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
+        conn.commit()
+        conn.close()
+        print("OK via " + str(attempt))
+        sys.exit(0)
+    except Exception as e:
+        errors.append(f"{attempt}: {e}")
+print("All connection attempts failed:", file=sys.stderr)
+for e in errors:
+    print(" -", e, file=sys.stderr)
+sys.exit(1)
 PYEOF
 }
 
@@ -197,23 +210,38 @@ apply_schema() {
     log "Applying database/schema.sql..."
     DB_USER="${DB_USER}" DB_PASS="${DB_PASS}" "${PY_BIN}" - <<PYEOF
 import pymysql, os, sys
+host = os.environ.get("DB_HOST", "127.0.0.1")
+port = int(os.environ.get("DB_PORT", "3306"))
+user = os.environ.get("DB_USER", "root")
+password = os.environ.get("DB_PASS", "")
 with open("database/schema.sql", "r", encoding="utf-8") as f:
     sql = f.read()
 statements = [s.strip() for s in sql.split(";") if s.strip()
               and not s.strip().startswith("--")]
-conn = pymysql.connect(host=os.environ.get("DB_HOST","127.0.0.1"),
-                       port=int(os.environ.get("DB_PORT","3306")),
-                       user=os.environ.get("DB_USER","root"),
-                       password=os.environ.get("DB_PASS",""),
-                       database="${PLUGIN_NAME}", charset="utf8mb4")
-try:
-    with conn.cursor() as c:
-        for stmt in statements:
-            c.execute(stmt)
-    conn.commit()
-finally:
-    conn.close()
-print("OK")
+errors = []
+for attempt in [
+    {"host": host, "port": port, "user": user, "password": password},
+    {"unix_socket": "/var/run/mysqld/mysqld.sock", "user": user, "password": password},
+    {"unix_socket": "/var/run/mysqld/mysqld.sock", "user": user, "password": ""},
+    {"unix_socket": "/var/run/mysqld/mysqld.sock", "user": "root", "password": ""},
+    {"unix_socket": "/tmp/mysql.sock", "user": "root", "password": ""},
+    {"host": "localhost", "user": "root", "password": ""},
+]:
+    try:
+        conn = pymysql.connect(database="${PLUGIN_NAME}", charset="utf8mb4", **attempt)
+        with conn.cursor() as c:
+            for stmt in statements:
+                c.execute(stmt)
+        conn.commit()
+        conn.close()
+        print("OK via " + str(attempt))
+        sys.exit(0)
+    except Exception as e:
+        errors.append(f"{attempt}: {e}")
+print("All connection attempts failed:", file=sys.stderr)
+for e in errors:
+    print(" -", e, file=sys.stderr)
+sys.exit(1)
 PYEOF
 }
 
