@@ -108,16 +108,36 @@ read_panel_db() {
 # Steps
 # -----------------------------------------------------------------------------
 install_python_deps() {
-    log "Installing Python dependencies..."
-    if "${PY_BIN}" -m pip install --quiet --break-system-packages -r requirements.txt 2>/dev/null; then
-        log "Python dependencies installed."
-    elif "${PY_BIN}" -m pip install --quiet -r requirements.txt 2>/dev/null; then
-        log "Python dependencies installed."
-    else
-        err "Failed to install Python dependencies. Please install manually:"
-        err "  ${PY_BIN} -m pip install -r ${PANEL_PLUGIN_DIR}/requirements.txt"
+    log "Installing Python dependencies (requirements.txt)..."
+    local pip_log="/tmp/sec_mon_pip.log"
+    local ok=0
+
+    # Try with --break-system-packages (Debian 13 / PEP 668)
+    if "${PY_BIN}" -m pip install --break-system-packages -r requirements.txt >"${pip_log}" 2>&1; then
+        ok=1
+    # Fallback: regular pip install (older Debian/Ubuntu)
+    elif "${PY_BIN}" -m pip install -r requirements.txt >>"${pip_log}" 2>&1; then
+        ok=1
+    # Try aaPanel's bundled Python (pyenv)
+    elif [[ -x "/www/server/panel/pyenv/bin/pip" ]]; then
+        warn "Falling back to aaPanel's bundled pip..."
+        if /www/server/panel/pyenv/bin/pip install -r requirements.txt >>"${pip_log}" 2>&1; then
+            ok=1
+        fi
+    fi
+
+    if [[ ${ok} -eq 0 ]]; then
+        err "Failed to install Python dependencies. Last 10 lines of pip log:"
+        tail -n 10 "${pip_log}" >&2 || true
+        err ""
+        err "Manual fix: run one of these commands as root:"
+        err "  ${PY_BIN} -m pip install --break-system-packages -r ${PANEL_PLUGIN_DIR}/requirements.txt"
+        err "  or: /www/server/panel/pyenv/bin/pip install -r ${PANEL_PLUGIN_DIR}/requirements.txt"
+        err ""
+        err "Then re-run:  sudo bash install.sh install"
         exit 1
     fi
+    log "Python dependencies installed."
 }
 
 create_dirs() {
