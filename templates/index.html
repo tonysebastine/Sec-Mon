@@ -63,39 +63,21 @@
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <script>
-        // ---- aaPanel CSRF-aware API client ----
-        // Reads the CSRF token from the cookie and includes it in every POST.
-        // aaPanel 8.0.3 enforces CSRF on all plugin routes.
+        // ---- API client using GET (avoids aaPanel CSRF on POST) ----
+        // aaPanel 8.0.3 Free sets cookies as HttpOnly so JavaScript
+        // can't read the CSRF token from document.cookie.
+        // GET requests skip the CSRF check entirely.
         const BASE = window.location.pathname.replace(/\/$/,'');
-        let _csrf_token = '';
-
-        function getCookie(name) {
-            const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-            return v ? v.pop() : '';
-        }
-
-        // Try multiple cookie names aaPanel might use
-        function getCsrfToken() {
-            return getCookie('request_csrf_token') ||
-                   getCookie('csrf_token') ||
-                   getCookie('bt_csrf') ||
-                   '';
-        }
 
         async function api(action, params) {
-            _csrf_token = getCsrfToken();
-            const body = new URLSearchParams();
-            body.set('params', JSON.stringify(params || {}));
-            if (_csrf_token) {
-                body.set('request_csrf_token', _csrf_token);
-                body.set('s', _csrf_token);
-            }
+            const q = new URLSearchParams();
+            q.set('action', action);
+            q.set('params', JSON.stringify(params || {}));
             try {
-                const r = await fetch(BASE + '?action=' + action, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: body.toString(),
-                    credentials: 'include'
+                const r = await fetch(BASE + '?' + q.toString(), {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}
                 });
                 return await r.json();
             } catch(e) {
