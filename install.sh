@@ -75,13 +75,35 @@ find_panel_config() {
 # Read aaPanel's MariaDB credentials (supports multiple aaPanel versions)
 # -----------------------------------------------------------------------------
 read_panel_db() {
-    local cfg
-    if ! cfg=$(find_panel_config); then
-        err "Could not locate aaPanel DB config."
-        err "Searched: ${PANEL_DIR}/config/db.json, ${PANEL_DATA_DIR}/db.conf, etc."
-        err "If your aaPanel uses a non-standard path, set DB_HOST/DB_USER/DB_PASS env vars."
-        exit 1
+    # If user provided explicit overrides via env vars, use them
+    if [[ -n "${DB_USER_OVERRIDE:-}" ]] || [[ -n "${DB_PASS_OVERRIDE:-}" ]]; then
+        log "Using DB credentials from environment variables (DB_*_OVERRIDE)"
+        export DB_USER="${DB_USER_OVERRIDE:-root}"
+        export DB_PASS="${DB_PASS_OVERRIDE:-}"
+        export DB_HOST="${DB_HOST_OVERRIDE:-127.0.0.1}"
+        export DB_PORT="${DB_PORT_OVERRIDE:-3306}"
+        log "DB target: ${DB_USER}@${DB_HOST}:${DB_PORT}"
+        return 0
     fi
+
+    # Interactive prompt - if no auto-detect config found, ask for creds
+    local cfg
+    if ! cfg=$(find_panel_config 2>/dev/null) || [[ ! -s "${cfg}" ]]; then
+        warn "No auto-detected aaPanel DB config found."
+        echo -e "\033[1;33m[sec_mon]\033[0m Please enter your MariaDB credentials:"
+        read -r -p "$(echo -e "\033[1;32m[sec_mon]\033[0m DB host [127.0.0.1]: ")" DB_HOST
+        DB_HOST="${DB_HOST:-127.0.0.1}"
+        read -r -p "$(echo -e "\033[1;32m[sec_mon]\033[0m DB port [3306]: ")" DB_PORT
+        DB_PORT="${DB_PORT:-3306}"
+        read -r -p "$(echo -e "\033[1;32m[sec_mon]\033[0m DB user [root]: ")" DB_USER
+        DB_USER="${DB_USER:-root}"
+        read -r -s -p "$(echo -e "\033[1;32m[sec_mon]\033[0m DB password: ")" DB_PASS
+        echo ""
+        export DB_USER DB_PASS DB_HOST DB_PORT
+        log "DB target: ${DB_USER}@${DB_HOST}:${DB_PORT}"
+        return 0
+    fi
+
     log "Found aaPanel DB config: ${cfg}"
 
     # Try JSON format first (newer aaPanel)
