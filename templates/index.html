@@ -63,101 +63,190 @@
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <script>
-        const A=window.location.pathname.replace(/\/$/,'')+'?action=';
-        async function api(p,o={}){try{const r=await fetch(A+p,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'params='+encodeURIComponent(JSON.stringify(o))});return await r.json()}catch(e){return{status:-1,msg:e.message}}}
-        function nav(el,p){document.querySelectorAll('.sidebar a').forEach(a=>a.classList.remove('active'));el.classList.add('active');const m=document.getElementById('main-content');m.innerHTML='<div style="text-align:center;padding:40px;color:#999"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';pages[p](m)}
-        const esc=s=>{const d=document.createElement('div');d.textContent=s;return d.innerHTML};
-        const badge=t=>t.includes('failure')||t.includes('root')?'danger':t.includes('success')?'success':'info';
+        // ---- aaPanel CSRF-aware API client ----
+        // Reads the CSRF token from the cookie and includes it in every POST.
+        // aaPanel 8.0.3 enforces CSRF on all plugin routes.
+        const BASE = window.location.pathname.replace(/\/$/,'');
+        let _csrf_token = '';
 
-        const pages={
-        async dashboard(el){
-            const s=(await api('api_event_stats')).data||{};
-            el.innerHTML=`<div class="kpi-grid">
-                <div class="kpi danger"><div class="value">${s['login.failure']||0}</div><div class="label">Failed Logins (24h)</div></div>
-                <div class="kpi success"><div class="value">${s['login.success']||0}</div><div class="label">Successful Logins</div></div>
-                <div class="kpi danger"><div class="value">${s['login.root']||0}</div><div class="label">Root Logins</div></div>
-                <div class="kpi info"><div class="value">${s['unique_ips_24h']||0}</div><div class="label">Unique IPs</div></div>
-                <div class="kpi warning"><div class="value">${s['sudo.command']||0}</div><div class="label">Sudo Commands</div></div>
-                <div class="kpi info"><div class="value">${s.total_events||0}</div><div class="label">Total Events</div></div></div>
-                <div class="card"><h2><i class="fas fa-clock"></i> Recent Events</h2><div id="re"></div></div>`;
-            const ev=((await api('api_events',{limit:15})).data||{}).events||[];
-            let h='<table class="events-table"><thead><tr><th>Time</th><th>Type</th><th>User</th><th>IP</th><th>Message</th></tr></thead><tbody>';
-            ev.forEach(e=>{h+=`<tr><td>${esc(e.timestamp||'')}</td><td><span class="badge ${badge(e.event_type)}">${esc(e.event_type)}</span></td><td>${esc(e.username||'-')}</td><td>${esc(e.ip_address||'-')}</td><td>${esc(e.message||'')}</td></tr>`});
-            h+='</tbody></table>';document.getElementById('re').innerHTML=h;
-        },
-        async events(el){
-            const r=await api('api_events',{limit:50});const ev=((r.data||{}).events)||[];
-            let h=`<div class="card"><h2><i class="fas fa-list"></i> Events (${(r.data||{}).total||0})</h2><table class="events-table"><thead><tr><th>Time</th><th>Type</th><th>User</th><th>IP</th><th>Port</th><th>Message</th></tr></thead><tbody>`;
-            ev.forEach(e=>{h+=`<tr><td>${esc(e.timestamp||'')}</td><td><span class="badge ${badge(e.event_type)}">${esc(e.event_type)}</span></td><td>${esc(e.username||'-')}</td><td>${esc(e.ip_address||'-')}</td><td>${esc(e.port||'-')}</td><td>${esc(e.message||'')}</td></tr>`});
-            h+='</tbody></table></div>';el.innerHTML=h;
-        },
-        async sessions(el){
-            const s=(await api('api_session_stats')).data||{};
-            el.innerHTML=`<div class="kpi-grid"><div class="kpi info"><div class="value">${s.sessions_24h||0}</div><div class="label">Sessions (24h)</div></div><div class="kpi warning"><div class="value">${s.sudo_24h||0}</div><div class="label">Sudo Commands</div></div><div class="kpi success"><div class="value">${s.active_sessions||0}</div><div class="label">Active (tracked)</div></div></div><div class="card"><h2><i class="fas fa-users"></i> Recent Sessions</h2><div id="sr"></div></div>`;
-            const ss=((await api('api_sessions',{limit:30})).data)||[];
-            let h='<table class="events-table"><thead><tr><th>Time</th><th>Type</th><th>User</th><th>IP</th><th>Message</th></tr></thead><tbody>';
-            ss.forEach(e=>{h+=`<tr><td>${esc(e.timestamp||'')}</td><td><span class="badge ${badge(e.event_type)}">${esc(e.event_type)}</span></td><td>${esc(e.username||'')}</td><td>${esc(e.ip_address||'-')}</td><td>${esc(e.message||'')}</td></tr>`});
-            h+='</tbody></table>';document.getElementById('sr').innerHTML=h;
-        },
-        async fail2ban(el){
-            const s=(await api('api_fail2ban_stats')).data||{};
-            el.innerHTML=`<div class="kpi-grid"><div class="kpi info"><div class="value">${s.total_jails||0}</div><div class="label">Jails</div></div><div class="kpi danger"><div class="value">${s.currently_banned||0}</div><div class="label">Currently Banned</div></div><div class="kpi warning"><div class="value">${s.bans_24h||0}</div><div class="label">Bans (24h)</div></div></div><div class="card"><h2><i class="fas fa-ban"></i> Jails</h2><div id="jr"></div></div>`;
-            const jails=(await api('api_fail2ban_jails')).data||[];
-            if(!jails.length){document.getElementById('jr').innerHTML='<p style="color:#999;text-align:center">No Fail2Ban data.</p>';return}
-            let h='<table class="events-table"><thead><tr><th>Jail</th><th>Status</th><th>Banned</th><th>Total</th><th>Failed</th></tr></thead><tbody>';
-            jails.forEach(j=>{h+=`<tr><td>${esc(j.jail_name||'')}</td><td><span class="badge ${j.status==='active'?'danger':'neutral'}">${esc(j.status||'')}</span></td><td>${j.currently_banned||0}</td><td>${j.total_banned||0}</td><td>${j.total_failed||0}</td></tr>`});
-            h+='</tbody></table>';document.getElementById('jr').innerHTML=h;
-        },
-        async ssl(el){
-            const s=(await api('api_ssl_stats')).data||{};
-            el.innerHTML=`<div class="kpi-grid"><div class="kpi success"><div class="value">${s.healthy||0}</div><div class="label">Healthy</div></div><div class="kpi warning"><div class="value">${s.warning||0}</div><div class="label">Warning</div></div><div class="kpi danger"><div class="value">${s.critical||0}</div><div class="label">Critical</div></div><div class="kpi info"><div class="value">${s.total||0}</div><div class="label">Total</div></div></div><div class="card"><h2><i class="fas fa-lock"></i> Certificates</h2><div id="cr"></div></div>`;
-            const certs=(await api('api_ssl_certificates')).data||[];
-            if(!certs.length){document.getElementById('cr').innerHTML='<p style="color:#999;text-align:center">No certificates found.</p>';return}
-            let h='<table class="events-table"><thead><tr><th>Domain</th><th>Status</th><th>Days Left</th><th>Issuer</th><th>Source</th></tr></thead><tbody>';
-            certs.forEach(c=>{const b=c.status==='healthy'?'success':c.status==='warning'?'warning':'danger';h+=`<tr><td>${esc(c.domain||'')}</td><td><span class="badge ${b}">${esc(c.status||'')}</span></td><td>${c.days_remaining!=null?c.days_remaining:'-'}</td><td>${esc((c.issuer||'').substring(0,40))}</td><td>${esc(c.source||'')}</td></tr>`});
-            h+='</tbody></table>';document.getElementById('cr').innerHTML=h;
-        },
-        async services(el){
-            const svcs=(await api('api_services_status')).data||[];
-            let h='<div class="card"><h2><i class="fas fa-cogs"></i> Service Status</h2>';
-            if(!svcs.length){h+='<p style="color:#999;text-align:center">No service data.</p>'}else{
-            h+='<table class="events-table"><thead><tr><th>Service</th><th>Status</th><th>PID</th><th>Memory</th></tr></thead><tbody>';
-            svcs.forEach(s=>{const b=s.status==='running'?'success':s.status==='failed'?'danger':'warning';const m=s.memory_kb?Math.round(s.memory_kb/1024)+' MB':'-';h+=`<tr><td>${esc(s.service_name||'')}</td><td><span class="badge ${b}">${esc(s.status)}</span></td><td>${s.pid||'-'}</td><td>${m}</td></tr>`});
-            h+='</tbody></table>'}h+='</div>';el.innerHTML=h;
-        },
-        async analytics(el){
-            el.innerHTML='<div class="card"><h2><i class="fas fa-chart-line"></i> Loading charts...</h2></div>';
-            const hr=(await api('api_hourly_logins',{hours:24})).data||{};
-            const hFailed=(hr.failed||[]).map(h=>({x:(h.hour||'').slice(11,13)+':00',y:h.cnt||0}));
-            const hSucc=(hr.successful||[]).map(h=>({x:(h.hour||'').slice(11,13)+':00',y:h.cnt||0}));
-            const allH=[...new Set([...hFailed.map(d=>d.x),...hSucc.map(d=>d.x)])].sort();
-            const fM=Object.fromEntries(hFailed.map(d=>[d.x,d.y])),sM=Object.fromEntries(hSucc.map(d=>[d.x,d.y]));
-            el.innerHTML=`<div class="card"><h2><i class="fas fa-chart-bar"></i> Logins per Hour (24h)</h2><canvas id="ch1" height="80"></canvas></div><div class="card"><h2><i class="fas fa-chart-pie"></i> Top Attackers</h2><canvas id="ch2" height="120"></canvas></div><div class="card"><h2><i class="fas fa-chart-line"></i> Login Trends (7 days)</h2><canvas id="ch3" height="60"></canvas></div>`;
-            new Chart(document.getElementById('ch1'),{type:'bar',data:{labels:allH,datasets:[{label:'Failed',data:allH.map(l=>fM[l]||0),backgroundColor:'#f44336'},{label:'Successful',data:allH.map(l=>sM[l]||0),backgroundColor:'#4caf50'}]},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true}}}});
-            const atk=((await api('api_top_attackers',{limit:10})).data)||[];
-            new Chart(document.getElementById('ch2'),{type:'bar',data:{labels:atk.map(a=>a.ip_address||'?'),datasets:[{label:'Failed',data:atk.map(a=>a.failed||a.total_attempts||0),backgroundColor:'#ff9800'}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}});
-            const trends=(await api('api_login_trends',{days:7})).data||[];
-            new Chart(document.getElementById('ch3'),{type:'line',data:{labels:trends.map(t=>(t.day||'').slice(5)),datasets:[{label:'Failed',data:trends.map(t=>t.failed||0),borderColor:'#f44336',backgroundColor:'rgba(244,67,54,.1)',fill:true,tension:.3},{label:'Successful',data:trends.map(t=>t.successful||0),borderColor:'#4caf50',backgroundColor:'rgba(76,175,80,.1)',fill:true,tension:.3}]},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true}}}});
-        },
-        async alerts(el){
-            const alerts=(await api('api_alerts',{limit:30})).data||[];
-            let h='<div class="card"><h2><i class="fas fa-bell"></i> Alerts</h2>';
-            if(!alerts.length){h+='<p style="color:#999;text-align:center;padding:20px">No alerts yet.</p>'}else{
-            h+='<table class="events-table"><thead><tr><th>Time</th><th>Severity</th><th>Title</th><th>Rule</th></tr></thead><tbody>';
-            alerts.forEach(a=>{const b=a.severity==='critical'?'danger':a.severity==='warning'?'warning':'info';h+=`<tr><td>${esc(a.created_at||'')}</td><td><span class="badge ${b}">${esc(a.severity)}</span></td><td>${esc(a.title||'')}</td><td>${esc(a.rule_id||'')}</td></tr>`});
-            h+='</tbody></table>'}h+='</div>';el.innerHTML=h;
-        },
-        async settings(el){
-            const st=(await api('api_status')).data||{};
-            el.innerHTML=`<div class="card"><h2><i class="fas fa-cog"></i> System Status</h2><table class="events-table"><tr><td>Version</td><td>${esc(st.version||'')}</td></tr><tr><td>DB</td><td>${st.db_connected?'<span class="badge success">Connected</span>':'<span class="badge danger">Disconnected</span>'}</td></tr><tr><td>Time</td><td>${esc(st.server_time||'')}</td></tr></table></div>
-            <div class="card"><h2><i class="fas fa-bell"></i> Test Notifications</h2><div style="display:flex;gap:10px"><button class="action" style="background:#0088cc" onclick="tNotif('telegram')">Telegram</button><button class="action" style="background:#5865f2" onclick="tNotif('discord')">Discord</button><button class="action" style="background:#4caf50" onclick="tNotif('email')">Email</button></div><div id="nr" style="margin-top:10px;font-size:13px"></div></div>
-            <div class="card"><h2><i class="fas fa-play"></i> Daemon</h2><button class="action btn-blue" onclick="sDaemon()">Start Daemon</button> <span id="ds" style="margin-left:10px;font-size:13px"></span></div>`;
+        function getCookie(name) {
+            const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+            return v ? v.pop() : '';
         }
+
+        // Try multiple cookie names aaPanel might use
+        function getCsrfToken() {
+            return getCookie('request_csrf_token') ||
+                   getCookie('csrf_token') ||
+                   getCookie('bt_csrf') ||
+                   '';
+        }
+
+        async function api(action, params) {
+            _csrf_token = getCsrfToken();
+            const body = new URLSearchParams();
+            body.set('params', JSON.stringify(params || {}));
+            if (_csrf_token) {
+                body.set('request_csrf_token', _csrf_token);
+                body.set('s', _csrf_token);
+            }
+            try {
+                const r = await fetch(BASE + '?action=' + action, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: body.toString(),
+                    credentials: 'include'
+                });
+                return await r.json();
+            } catch(e) {
+                return {status: -1, msg: e.message};
+            }
+        }
+
+        // ---- Helpers ----
+        function nav(el, page) {
+            document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+            el.classList.add('active');
+            const m = document.getElementById('main-content');
+            m.innerHTML = '<div style="text-align:center;padding:40px;color:#999"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+            if (pages[page]) pages[page](m);
+            else m.innerHTML = '<div class="card"><p>Page not found.</p></div>';
+        }
+
+        const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+        const badge = t => t.includes('failure') || t.includes('root') ? 'danger' : t.includes('success') ? 'success' : 'info';
+
+        // ---- Pages ----
+        const pages = {
+            async dashboard(el) {
+                const s = (await api('api_event_stats')).data || {};
+                el.innerHTML = `<div class="kpi-grid">
+                    <div class="kpi danger"><div class="value">${s['login.failure']||0}</div><div class="label">Failed Logins (24h)</div></div>
+                    <div class="kpi success"><div class="value">${s['login.success']||0}</div><div class="label">Successful Logins</div></div>
+                    <div class="kpi danger"><div class="value">${s['login.root']||0}</div><div class="label">Root Logins</div></div>
+                    <div class="kpi info"><div class="value">${s['unique_ips_24h']||0}</div><div class="label">Unique IPs</div></div>
+                    <div class="kpi warning"><div class="value">${s['sudo.command']||0}</div><div class="label">Sudo Commands</div></div>
+                    <div class="kpi info"><div class="value">${s.total_events||0}</div><div class="label">Total Events</div></div></div>
+                    <div class="card"><h2><i class="fas fa-clock"></i> Recent Events</h2><div id="re"></div></div>`;
+                const ev = ((await api('api_events', {limit: 15})).data || {}).events || [];
+                let h = '<table class="events-table"><thead><tr><th>Time</th><th>Type</th><th>User</th><th>IP</th><th>Message</th></tr></thead><tbody>';
+                ev.forEach(e => { h += `<tr><td>${esc(e.timestamp||'')}</td><td><span class="badge ${badge(e.event_type)}">${esc(e.event_type)}</span></td><td>${esc(e.username||'-')}</td><td>${esc(e.ip_address||'-')}</td><td>${esc(e.message||'')}</td></tr>`; });
+                h += '</tbody></table>';
+                document.getElementById('re').innerHTML = h;
+            },
+            async events(el) {
+                const r = await api('api_events', {limit: 50});
+                const ev = ((r.data || {}).events) || [];
+                let h = `<div class="card"><h2><i class="fas fa-list"></i> Events (${(r.data||{}).total||0})</h2><table class="events-table"><thead><tr><th>Time</th><th>Type</th><th>User</th><th>IP</th><th>Port</th><th>Message</th></tr></thead><tbody>`;
+                ev.forEach(e => { h += `<tr><td>${esc(e.timestamp||'')}</td><td><span class="badge ${badge(e.event_type)}">${esc(e.event_type)}</span></td><td>${esc(e.username||'-')}</td><td>${esc(e.ip_address||'-')}</td><td>${esc(e.port||'-')}</td><td>${esc(e.message||'')}</td></tr>`; });
+                h += '</tbody></table></div>';
+                el.innerHTML = h;
+            },
+            async sessions(el) {
+                const s = (await api('api_session_stats')).data || {};
+                el.innerHTML = `<div class="kpi-grid"><div class="kpi info"><div class="value">${s.sessions_24h||0}</div><div class="label">Sessions (24h)</div></div><div class="kpi warning"><div class="value">${s.sudo_24h||0}</div><div class="label">Sudo Commands</div></div><div class="kpi success"><div class="value">${s.active_sessions||0}</div><div class="label">Active (tracked)</div></div></div><div class="card"><h2><i class="fas fa-users"></i> Recent Sessions</h2><div id="sr"></div></div>`;
+                const ss = (await api('api_sessions', {limit: 30})).data || [];
+                let h = '<table class="events-table"><thead><tr><th>Time</th><th>Type</th><th>User</th><th>IP</th><th>Message</th></tr></thead><tbody>';
+                ss.forEach(e => { h += `<tr><td>${esc(e.timestamp||'')}</td><td><span class="badge ${badge(e.event_type)}">${esc(e.event_type)}</span></td><td>${esc(e.username||'')}</td><td>${esc(e.ip_address||'-')}</td><td>${esc(e.message||'')}</td></tr>`; });
+                h += '</tbody></table>';
+                document.getElementById('sr').innerHTML = h;
+            },
+            async fail2ban(el) {
+                const s = (await api('api_fail2ban_stats')).data || {};
+                el.innerHTML = `<div class="kpi-grid"><div class="kpi info"><div class="value">${s.total_jails||0}</div><div class="label">Jails</div></div><div class="kpi danger"><div class="value">${s.currently_banned||0}</div><div class="label">Currently Banned</div></div><div class="kpi warning"><div class="value">${s.bans_24h||0}</div><div class="label">Bans (24h)</div></div></div><div class="card"><h2><i class="fas fa-ban"></i> Jails</h2><div id="jr"></div></div>`;
+                const jails = (await api('api_fail2ban_jails')).data || [];
+                if (!jails.length) { document.getElementById('jr').innerHTML = '<p style="color:#999;text-align:center">No Fail2Ban data.</p>'; return; }
+                let h = '<table class="events-table"><thead><tr><th>Jail</th><th>Status</th><th>Banned</th><th>Total</th><th>Failed</th></tr></thead><tbody>';
+                jails.forEach(j => { h += `<tr><td>${esc(j.jail_name||'')}</td><td><span class="badge ${j.status==='active'?'danger':'neutral'}">${esc(j.status||'')}</span></td><td>${j.currently_banned||0}</td><td>${j.total_banned||0}</td><td>${j.total_failed||0}</td></tr>`; });
+                h += '</tbody></table>';
+                document.getElementById('jr').innerHTML = h;
+            },
+            async ssl(el) {
+                const s = (await api('api_ssl_stats')).data || {};
+                el.innerHTML = `<div class="kpi-grid"><div class="kpi success"><div class="value">${s.healthy||0}</div><div class="label">Healthy</div></div><div class="kpi warning"><div class="value">${s.warning||0}</div><div class="label">Warning</div></div><div class="kpi danger"><div class="value">${s.critical||0}</div><div class="label">Critical</div></div><div class="kpi info"><div class="value">${s.total||0}</div><div class="label">Total</div></div></div><div class="card"><h2><i class="fas fa-lock"></i> Certificates</h2><div id="cr"></div></div>`;
+                const certs = (await api('api_ssl_certificates')).data || [];
+                if (!certs.length) { document.getElementById('cr').innerHTML = '<p style="color:#999;text-align:center">No certificates found.</p>'; return; }
+                let h = '<table class="events-table"><thead><tr><th>Domain</th><th>Status</th><th>Days Left</th><th>Issuer</th><th>Source</th></tr></thead><tbody>';
+                certs.forEach(c => { const b = c.status === 'healthy' ? 'success' : c.status === 'warning' ? 'warning' : 'danger'; h += `<tr><td>${esc(c.domain||'')}</td><td><span class="badge ${b}">${esc(c.status||'')}</span></td><td>${c.days_remaining!=null?c.days_remaining:'-'}</td><td>${esc((c.issuer||'').substring(0,40))}</td><td>${esc(c.source||'')}</td></tr>`; });
+                h += '</tbody></table>';
+                document.getElementById('cr').innerHTML = h;
+            },
+            async services(el) {
+                const svcs = (await api('api_services_status')).data || [];
+                let h = '<div class="card"><h2><i class="fas fa-cogs"></i> Service Status</h2>';
+                if (!svcs.length) { h += '<p style="color:#999;text-align:center">No service data.</p>'; } else {
+                    h += '<table class="events-table"><thead><tr><th>Service</th><th>Status</th><th>PID</th><th>Memory</th></tr></thead><tbody>';
+                    svcs.forEach(s => { const b = s.status === 'running' ? 'success' : s.status === 'failed' ? 'danger' : 'warning'; const m = s.memory_kb ? Math.round(s.memory_kb/1024)+' MB' : '-'; h += `<tr><td>${esc(s.service_name||'')}</td><td><span class="badge ${b}">${esc(s.status)}</span></td><td>${s.pid||'-'}</td><td>${m}</td></tr>`; });
+                    h += '</tbody></table>';
+                }
+                h += '</div>';
+                el.innerHTML = h;
+            },
+            async analytics(el) {
+                el.innerHTML = '<div class="card"><h2><i class="fas fa-chart-line"></i> Loading charts...</h2></div>';
+                const hr = (await api('api_hourly_logins', {hours: 24})).data || {};
+                const hFailed = (hr.failed||[]).map(h => ({x: (h.hour||'').slice(11,13)+':00', y: h.cnt||0}));
+                const hSucc = (hr.successful||[]).map(h => ({x: (h.hour||'').slice(11,13)+':00', y: h.cnt||0}));
+                const allH = [...new Set([...hFailed.map(d=>d.x), ...hSucc.map(d=>d.x)])].sort();
+                const fM = Object.fromEntries(hFailed.map(d => [d.x, d.y]));
+                const sM = Object.fromEntries(hSucc.map(d => [d.x, d.y]));
+                el.innerHTML = `<div class="card"><h2><i class="fas fa-chart-bar"></i> Logins per Hour (24h)</h2><canvas id="ch1" height="80"></canvas></div><div class="card"><h2><i class="fas fa-chart-pie"></i> Top Attackers</h2><canvas id="ch2" height="120"></canvas></div><div class="card"><h2><i class="fas fa-chart-line"></i> Login Trends (7 days)</h2><canvas id="ch3" height="60"></canvas></div>`;
+                new Chart(document.getElementById('ch1'), {type:'bar', data:{labels:allH, datasets:[{label:'Failed', data:allH.map(l=>fM[l]||0), backgroundColor:'#f44336'}, {label:'Successful', data:allH.map(l=>sM[l]||0), backgroundColor:'#4caf50'}]}, options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true}}}});
+                const atk = (await api('api_top_attackers', {limit: 10})).data || [];
+                new Chart(document.getElementById('ch2'), {type:'bar', data:{labels:atk.map(a=>a.ip_address||'?'), datasets:[{label:'Failed', data:atk.map(a=>a.failed||a.total_attempts||0), backgroundColor:'#ff9800'}]}, options:{indexAxis:'y', responsive:true, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}}}});
+                const trends = (await api('api_login_trends', {days: 7})).data || [];
+                new Chart(document.getElementById('ch3'), {type:'line', data:{labels:trends.map(t=>(t.day||'').slice(5)), datasets:[{label:'Failed', data:trends.map(t=>t.failed||0), borderColor:'#f44336', backgroundColor:'rgba(244,67,54,.1)', fill:true, tension:.3}, {label:'Successful', data:trends.map(t=>t.successful||0), borderColor:'#4caf50', backgroundColor:'rgba(76,175,80,.1)', fill:true, tension:.3}]}, options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true}}}});
+            },
+            async alerts(el) {
+                const alerts = (await api('api_alerts', {limit: 30})).data || [];
+                let h = '<div class="card"><h2><i class="fas fa-bell"></i> Alerts</h2>';
+                if (!alerts.length) { h += '<p style="color:#999;text-align:center;padding:20px">No alerts yet.</p>'; } else {
+                    h += '<table class="events-table"><thead><tr><th>Time</th><th>Severity</th><th>Title</th><th>Rule</th></tr></thead><tbody>';
+                    alerts.forEach(a => { const b = a.severity === 'critical' ? 'danger' : a.severity === 'warning' ? 'warning' : 'info'; h += `<tr><td>${esc(a.created_at||'')}</td><td><span class="badge ${b}">${esc(a.severity)}</span></td><td>${esc(a.title||'')}</td><td>${esc(a.rule_id||'')}</td></tr>`; });
+                    h += '</tbody></table>';
+                }
+                h += '</div>';
+                el.innerHTML = h;
+            },
+            async settings(el) {
+                const st = (await api('api_status')).data || {};
+                el.innerHTML = `<div class="card"><h2><i class="fas fa-cog"></i> System Status</h2><table class="events-table"><tr><td>Version</td><td>${esc(st.version||'')}</td></tr><tr><td>DB</td><td>${st.db_connected?'<span class="badge success">Connected</span>':'<span class="badge danger">Disconnected</span>'}</td></tr><tr><td>Time</td><td>${esc(st.server_time||'')}</td></tr></table></div>
+                <div class="card"><h2><i class="fas fa-bell"></i> Test Notifications</h2><div style="display:flex;gap:10px"><button class="action" style="background:#0088cc" onclick="tNotif('telegram')">Telegram</button><button class="action" style="background:#5865f2" onclick="tNotif('discord')">Discord</button><button class="action" style="background:#4caf50" onclick="tNotif('email')">Email</button></div><div id="nr" style="margin-top:10px;font-size:13px"></div></div>
+                <div class="card"><h2><i class="fas fa-play"></i> Daemon</h2><button class="action btn-blue" onclick="sDaemon()">Start Daemon</button> <span id="ds" style="margin-left:10px;font-size:13px"></span></div>`;
+            }
         };
-        async function tNotif(ch){const r=await api('api_notifications_test',{channel:ch});const e=document.getElementById('nr');e.textContent=r.status===0?'✓ '+ch+' sent':'✗ '+ch+': '+(r.msg||'err');e.style.color=r.status===0?'#4caf50':'#f44336'}
-        async function sDaemon(){const r=await api('api_daemon_start');document.getElementById('ds').textContent=r.status===0?'Started':'Failed'}
-        async function checkStatus(){const r=await api('api_status');const e=document.getElementById('header-status');if(r.status===0){e.className='status ok';e.textContent='Connected | '+(r.data?.server_time||'')}else{e.className='status err';e.textContent='Disconnected'}}
-        setInterval(checkStatus,30000);checkStatus();pages.dashboard(document.getElementById('main-content'));
+
+        // ---- Actions ----
+        async function tNotif(ch) {
+            const r = await api('api_notifications_test', {channel: ch});
+            const e = document.getElementById('nr');
+            e.textContent = r.status === 0 ? '✓ ' + ch + ' sent' : '✗ ' + ch + ': ' + (r.msg || 'err');
+            e.style.color = r.status === 0 ? '#4caf50' : '#f44336';
+        }
+
+        async function sDaemon() {
+            const r = await api('api_daemon_start');
+            document.getElementById('ds').textContent = r.status === 0 ? 'Started' : 'Failed';
+            if (r.data) document.getElementById('ds').textContent += ': ' + JSON.stringify(r.data);
+        }
+
+        async function checkStatus() {
+            const r = await api('api_status');
+            const e = document.getElementById('header-status');
+            if (r.status === 0 && r.data) {
+                e.className = 'status ok';
+                e.textContent = 'Connected | v' + (r.data.version||'') + ' | DB: ' + (r.data.db_connected ? '✓' : '✗');
+            } else {
+                e.className = 'status err';
+                e.textContent = 'Disconnected';
+                if (r.msg) e.textContent += ': ' + r.msg;
+            }
+        }
+
+        // ---- Init ----
+        setInterval(checkStatus, 30000);
+        checkStatus();
+        pages.dashboard(document.getElementById('main-content'));
     </script>
 </body>
 </html>
