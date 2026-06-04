@@ -195,12 +195,16 @@ seed_config() {
 
 create_database() {
     log "Creating MariaDB database '${PLUGIN_NAME}'..."
-    DB_USER="${DB_USER}" DB_PASS="${DB_PASS}" "${PY_BIN}" - <<PYEOF
+    # Pass credentials explicitly to Python via env vars
+    DB_HOST="${DB_HOST}" DB_PORT="${DB_PORT}" \
+    DB_USER="${DB_USER}" DB_PASS="${DB_PASS}" \
+    "${PY_BIN}" - <<PYEOF
 import pymysql, os, sys
 host = os.environ.get("DB_HOST", "127.0.0.1")
 port = int(os.environ.get("DB_PORT", "3306"))
 user = os.environ.get("DB_USER", "root")
 password = os.environ.get("DB_PASS", "")
+print("DEBUG: connecting as user=" + repr(user) + " host=" + repr(host) + " port=" + str(port) + " pwd_len=" + str(len(password)), file=sys.stderr)
 errors = []
 for attempt in [
     {"host": host, "port": port, "user": user, "password": password},
