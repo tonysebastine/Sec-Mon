@@ -13,7 +13,17 @@ PLUGIN_NAME="sec_mon"
 PANEL_DIR="/www/server/panel"
 PANEL_PLUGIN_DIR="${PANEL_DIR}/plugin/${PLUGIN_NAME}"
 PANEL_DATA_DIR="${PANEL_DIR}/data"
-PY_BIN="$(command -v python3 || command -v python)"
+
+# Prefer aaPanel's bundled Python (pyenv) - it has PyMySQL etc. installed there
+# when our pip fallback succeeded. Fall back to system python3.
+if [[ -x "${PANEL_DIR}/pyenv/bin/python" ]]; then
+    PY_BIN="${PANEL_DIR}/pyenv/bin/python"
+elif [[ -x "${PANEL_DIR}/pyenv/bin/python3" ]]; then
+    PY_BIN="${PANEL_DIR}/pyenv/bin/python3"
+else
+    PY_BIN="$(command -v python3 || command -v python)"
+fi
+export PY_BIN
 
 cd "${PANEL_PLUGIN_DIR}"
 
