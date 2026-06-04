@@ -86,10 +86,14 @@ read_panel_db() {
 
     # Try JSON format first (newer aaPanel)
     if [[ "${cfg}" == *.json ]]; then
-        DB_USER=$(python3 -c "import json,sys; d=json.load(open('${cfg}')); print(d.get('mysql_username', d.get('user', 'root')))" 2>/dev/null || echo "root")
-        DB_PASS=$(python3 -c "import json,sys; d=json.load(open('${cfg}')); print(d.get('mysql_password', d.get('password', '')))" 2>/dev/null || echo "")
-        DB_HOST=$(python3 -c "import json,sys; d=json.load(open('${cfg}')); print(d.get('mysql_host', d.get('host', '127.0.0.1')))" 2>/dev/null || echo "127.0.0.1")
-        DB_PORT=$(python3 -c "import json,sys; d=json.load(open('${cfg}')); print(d.get('mysql_port', d.get('port', 3306)))" 2>/dev/null || echo "3306")
+        # Use aaPanel's pyenv Python (or aaPanel's own) to parse - it
+        # has the right environment and will not be blocked by PEP 668.
+        local parser="${PANEL_DIR}/pyenv/bin/python"
+        [[ -x "${parser}" ]] || parser="${PY_BIN}"
+        DB_USER=$("${parser}" -c "import json; d=json.load(open('${cfg}')); print(d.get('mysql_username', d.get('user', d.get('username', 'root'))))" 2>/dev/null || echo "root")
+        DB_PASS=$("${parser}" -c "import json; d=json.load(open('${cfg}')); print(d.get('mysql_password', d.get('password', d.get('pass', d.get('mysql_pass', '')))))" 2>/dev/null || echo "")
+        DB_HOST=$("${parser}" -c "import json; d=json.load(open('${cfg}')); print(d.get('mysql_host', d.get('host', '127.0.0.1')))" 2>/dev/null || echo "127.0.0.1")
+        DB_PORT=$("${parser}" -c "import json; d=json.load(open('${cfg}')); print(d.get('mysql_port', d.get('port', 3306)))" 2>/dev/null || echo "3306")
     else
         # Legacy Python-dict format (older aaPanel)
         DB_USER=$(awk -F"'" '/mysql_username/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${cfg}" 2>/dev/null || true)
