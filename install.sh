@@ -10,9 +10,9 @@ set -euo pipefail
 # Paths
 # -----------------------------------------------------------------------------
 PLUGIN_NAME="sec_mon"
-PANEL_PLUGIN_DIR="/www/server/panel/plugin/${PLUGIN_NAME}"
-PANEL_DATA_DIR="/www/server/panel/data"
-PANEL_CONFIG="${PANEL_DATA_DIR}/db.conf"          # aaPanel MariaDB creds
+PANEL_DIR="/www/server/panel"
+PANEL_PLUGIN_DIR="${PANEL_DIR}/plugin/${PLUGIN_NAME}"
+PANEL_DATA_DIR="${PANEL_DIR}/data"
 PY_BIN="$(command -v python3 || command -v python)"
 
 cd "${PANEL_PLUGIN_DIR}"
@@ -31,33 +31,77 @@ require_root() {
     fi
 }
 
+# -----------------------------------------------------------------------------
+# aaPanel detection
+# -----------------------------------------------------------------------------
 panel_installed() {
-    [[ -d "/www/server/panel" ]] && [[ -f "${PANEL_CONFIG}" ]]
+    # Check directory and key aaPanel binaries
+    [[ -d "${PANEL_DIR}" ]] && \
+    [[ -f "${PANEL_DIR}/BTPanel/__init__.py" || -f "${PANEL_DIR}/BTPanel" ]]
 }
 
 # -----------------------------------------------------------------------------
-# Read aaPanel's MariaDB credentials
+# Locate aaPanel DB credentials
+# Tries multiple config file locations used across aaPanel versions.
+# -----------------------------------------------------------------------------
+find_panel_config() {
+    local candidates=(
+        "${PANEL_DIR}/config/db.json"          # newer aaPanel
+        "${PANEL_DIR}/data/db.conf"             # older aaPanel
+        "${PANEL_DIR}/config/config.json"
+        "${PANEL_DATA_DIR}/db.conf"
+        "/root/.config/bt/db.json"
+    )
+    for f in "${candidates[@]}"; do
+        if [[ -f "${f}" ]]; then
+            echo "${f}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# -----------------------------------------------------------------------------
+# Read aaPanel's MariaDB credentials (supports multiple aaPanel versions)
 # -----------------------------------------------------------------------------
 read_panel_db() {
-    if [[ ! -f "${PANEL_CONFIG}" ]]; then
-        err "aaPanel config ${PANEL_CONFIG} not found. Is aaPanel installed?"
+    local cfg
+    if ! cfg=$(find_panel_config); then
+        err "Could not locate aaPanel DB config."
+        err "Searched: ${PANEL_DIR}/config/db.json, ${PANEL_DATA_DIR}/db.conf, etc."
+        err "If your aaPanel uses a non-standard path, set DB_HOST/DB_USER/DB_PASS env vars."
         exit 1
     fi
-    DB_USER=$(awk -F"'" '/mysql_username/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${PANEL_CONFIG}" 2>/dev/null || true)
-    DB_PASS=$(awk -F"'" '/mysql_password/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${PANEL_CONFIG}" 2>/dev/null || true)
-    DB_HOST=$(awk -F"'" '/mysql_host/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${PANEL_CONFIG}" 2>/dev/null || true)
-    DB_PORT=$(awk -F"'" '/mysql_port/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${PANEL_CONFIG}" 2>/dev/null || true)
+    log "Found aaPanel DB config: ${cfg}"
 
-    if [[ -z "${DB_USER:-}" || -z "${DB_PASS:-}" ]]; then
-        # Fallback: parse JSON-like config
-        DB_USER=$(grep -oP '(?<=mysql_username["'"'"']?\s*=\s*["'"'"'])[^"'"'"']+' "${PANEL_CONFIG}" 2>/dev/null || echo "root")
-        DB_PASS=$(grep -oP '(?<=mysql_password["'"'"']?\s*=\s*["'"'"'])[^"'"'"']+' "${PANEL_CONFIG}" 2>/dev/null || echo "")
-        DB_HOST=$(grep -oP '(?<=mysql_host["'"'"']?\s*=\s*["'"'"'])[^"'"'"']+' "${PANEL_CONFIG}" 2>/dev/null || echo "127.0.0.1")
-        DB_PORT=$(grep -oP '(?<=mysql_port["'"'"']?\s*=\s*["'"'"'])[^"'"'"']+' "${PANEL_CONFIG}" 2>/dev/null || echo "3306")
+    # Try JSON format first (newer aaPanel)
+    if [[ "${cfg}" == *.json ]]; then
+        DB_USER=$(python3 -c "import json,sys; d=json.load(open('${cfg}')); print(d.get('mysql_username', d.get('user', 'root')))" 2>/dev/null || echo "root")
+        DB_PASS=$(python3 -c "import json,sys; d=json.load(open('${cfg}')); print(d.get('mysql_password', d.get('password', '')))" 2>/dev/null || echo "")
+        DB_HOST=$(python3 -c "import json,sys; d=json.load(open('${cfg}')); print(d.get('mysql_host', d.get('host', '127.0.0.1')))" 2>/dev/null || echo "127.0.0.1")
+        DB_PORT=$(python3 -c "import json,sys; d=json.load(open('${cfg}')); print(d.get('mysql_port', d.get('port', 3306)))" 2>/dev/null || echo "3306")
+    else
+        # Legacy Python-dict format (older aaPanel)
+        DB_USER=$(awk -F"'" '/mysql_username/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${cfg}" 2>/dev/null || true)
+        DB_PASS=$(awk -F"'" '/mysql_password/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${cfg}" 2>/dev/null || true)
+        DB_HOST=$(awk -F"'" '/mysql_host/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${cfg}" 2>/dev/null || true)
+        DB_PORT=$(awk -F"'" '/mysql_port/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${cfg}" 2>/dev/null || true)
     fi
+
+    # Fallbacks
+    DB_USER="${DB_USER:-root}"
+    DB_PASS="${DB_PASS:-}"
     DB_HOST="${DB_HOST:-127.0.0.1}"
     DB_PORT="${DB_PORT:-3306}"
+
+    # Allow env var overrides
+    DB_USER="${DB_USER_OVERRIDE:-$DB_USER}"
+    DB_PASS="${DB_PASS_OVERRIDE:-$DB_PASS}"
+    DB_HOST="${DB_HOST_OVERRIDE:-$DB_HOST}"
+    DB_PORT="${DB_PORT_OVERRIDE:-$DB_PORT}"
+
     export DB_USER DB_PASS DB_HOST DB_PORT
+    log "DB target: ${DB_USER}@${DB_HOST}:${DB_PORT}"
 }
 
 # -----------------------------------------------------------------------------
@@ -65,22 +109,20 @@ read_panel_db() {
 # -----------------------------------------------------------------------------
 install_python_deps() {
     log "Installing Python dependencies..."
-    if "${PY_BIN}" -m pip install --quiet -r requirements.txt 2>/dev/null; then
-        log "Python dependencies installed via pip."
+    if "${PY_BIN}" -m pip install --quiet --break-system-packages -r requirements.txt 2>/dev/null; then
+        log "Python dependencies installed."
+    elif "${PY_BIN}" -m pip install --quiet -r requirements.txt 2>/dev/null; then
+        log "Python dependencies installed."
     else
-        warn "pip install failed; trying with --break-system-packages (PEP 668)"
-        "${PY_BIN}" -m pip install --quiet --break-system-packages -r requirements.txt || {
-            err "Failed to install Python dependencies. Please install manually:"
-            err "  ${PY_BIN} -m pip install -r ${PANEL_PLUGIN_DIR}/requirements.txt"
-            exit 1
-        }
+        err "Failed to install Python dependencies. Please install manually:"
+        err "  ${PY_BIN} -m pip install -r ${PANEL_PLUGIN_DIR}/requirements.txt"
+        exit 1
     fi
 }
 
 create_dirs() {
     log "Creating runtime directories..."
     mkdir -p logs data data/offsets config
-    # Touch log files so the panel can read them immediately
     touch logs/app.log logs/daemon.log logs/error.log
     chmod 750 logs data
 }
@@ -97,11 +139,13 @@ seed_config() {
 
 create_database() {
     log "Creating MariaDB database '${PLUGIN_NAME}'..."
-    "${PY_BIN}" - <<PYEOF
-import pymysql, sys
+    DB_USER="${DB_USER}" DB_PASS="${DB_PASS}" "${PY_BIN}" - <<PYEOF
+import pymysql, os, sys
 try:
-    conn = pymysql.connect(host="${DB_HOST}", port=int("${DB_PORT}"),
-                           user="${DB_USER}", password="${DB_PASS}",
+    conn = pymysql.connect(host=os.environ.get("DB_HOST","127.0.0.1"),
+                           port=int(os.environ.get("DB_PORT","3306")),
+                           user=os.environ.get("DB_USER","root"),
+                           password=os.environ.get("DB_PASS",""),
                            charset="utf8mb4")
     with conn.cursor() as c:
         c.execute(f"CREATE DATABASE IF NOT EXISTS \`${PLUGIN_NAME}\` "
@@ -117,14 +161,16 @@ PYEOF
 
 apply_schema() {
     log "Applying database/schema.sql..."
-    "${PY_BIN}" - <<PYEOF
-import pymysql, re, sys
+    DB_USER="${DB_USER}" DB_PASS="${DB_PASS}" "${PY_BIN}" - <<PYEOF
+import pymysql, os, sys
 with open("database/schema.sql", "r", encoding="utf-8") as f:
     sql = f.read()
 statements = [s.strip() for s in sql.split(";") if s.strip()
               and not s.strip().startswith("--")]
-conn = pymysql.connect(host="${DB_HOST}", port=int("${DB_PORT}"),
-                       user="${DB_USER}", password="${DB_PASS}",
+conn = pymysql.connect(host=os.environ.get("DB_HOST","127.0.0.1"),
+                       port=int(os.environ.get("DB_PORT","3306")),
+                       user=os.environ.get("DB_USER","root"),
+                       password=os.environ.get("DB_PASS",""),
                        database="${PLUGIN_NAME}", charset="utf8mb4")
 try:
     with conn.cursor() as c:
@@ -143,7 +189,6 @@ set_permissions() {
     find "${PANEL_PLUGIN_DIR}" -type d -exec chmod 750 {} \;
     find "${PANEL_PLUGIN_DIR}" -type f -exec chmod 640 {} \;
     chmod 750 install.sh uninstall.sh
-    # Logs/data need to be writable by root only
     chmod 770 logs data
 }
 
@@ -177,7 +222,8 @@ ACTION="${1:-install}"
 
 require_root
 if ! panel_installed; then
-    err "aaPanel not detected at /www/server/panel. Aborting."
+    err "aaPanel not detected at ${PANEL_DIR}. Aborting."
+    err "If aaPanel is installed at a different path, set PANEL_DIR env var."
     exit 1
 fi
 read_panel_db

@@ -6,10 +6,25 @@
 set -euo pipefail
 
 PLUGIN_NAME="sec_mon"
-PANEL_PLUGIN_DIR="/www/server/panel/plugin/${PLUGIN_NAME}"
-PANEL_DATA_DIR="/www/server/panel/data"
-PANEL_CONFIG="${PANEL_DATA_DIR}/db.conf"
+PANEL_DIR="/www/server/panel"
+PANEL_PLUGIN_DIR="${PANEL_DIR}/plugin/${PLUGIN_NAME}"
+PANEL_DATA_DIR="${PANEL_DIR}/data"
 PY_BIN="$(command -v python3 || command -v python)"
+
+# Locate aaPanel DB config
+find_panel_config() {
+    local candidates=(
+        "${PANEL_DIR}/config/db.json"
+        "${PANEL_DIR}/data/db.conf"
+        "${PANEL_DIR}/config/config.json"
+        "${PANEL_DATA_DIR}/db.conf"
+        "/root/.config/bt/db.json"
+    )
+    for f in "${candidates[@]}"; do
+        [[ -f "${f}" ]] && { echo "${f}"; return 0; }
+    done
+    return 1
+}
 
 KEEP_DB=0
 KEEP_CONFIG=0
@@ -36,13 +51,26 @@ fi
 # Read aaPanel DB credentials (same logic as install.sh)
 # -----------------------------------------------------------------------------
 read_panel_db() {
-    DB_USER=$(awk -F"'" '/mysql_username/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${PANEL_CONFIG}" 2>/dev/null || true)
-    DB_PASS=$(awk -F"'" '/mysql_password/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${PANEL_CONFIG}" 2>/dev/null || true)
-    DB_HOST=$(awk -F"'" '/mysql_host/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${PANEL_CONFIG}" 2>/dev/null || true)
-    DB_PORT=$(awk -F"'" '/mysql_port/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${PANEL_CONFIG}" 2>/dev/null || true)
+    local cfg
+    if ! cfg=$(find_panel_config); then
+        warn "Could not locate aaPanel DB config; skipping database drop."
+        return 1
+    fi
+    if [[ "${cfg}" == *.json ]]; then
+        DB_USER=$(python3 -c "import json; d=json.load(open('${cfg}')); print(d.get('mysql_username', d.get('user', 'root')))" 2>/dev/null || echo "root")
+        DB_PASS=$(python3 -c "import json; d=json.load(open('${cfg}')); print(d.get('mysql_password', d.get('password', '')))" 2>/dev/null || echo "")
+        DB_HOST=$(python3 -c "import json; d=json.load(open('${cfg}')); print(d.get('mysql_host', d.get('host', '127.0.0.1')))" 2>/dev/null || echo "127.0.0.1")
+        DB_PORT=$(python3 -c "import json; d=json.load(open('${cfg}')); print(d.get('mysql_port', d.get('port', 3306)))" 2>/dev/null || echo "3306")
+    else
+        DB_USER=$(awk -F"'" '/mysql_username/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${cfg}" 2>/dev/null || true)
+        DB_PASS=$(awk -F"'" '/mysql_password/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${cfg}" 2>/dev/null || true)
+        DB_HOST=$(awk -F"'" '/mysql_host/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${cfg}" 2>/dev/null || true)
+        DB_PORT=$(awk -F"'" '/mysql_port/{for(i=1;i<=NF;i++){if($i=="'"'"'"){print $(i+2);exit}}}' "${cfg}" 2>/dev/null || true)
+    fi
     DB_HOST="${DB_HOST:-127.0.0.1}"
     DB_PORT="${DB_PORT:-3306}"
     export DB_USER DB_PASS DB_HOST DB_PORT
+    return 0
 }
 
 stop_background_workers() {
@@ -65,11 +93,13 @@ drop_database() {
         return
     fi
     log "Dropping MariaDB database '${PLUGIN_NAME}'..."
-    "${PY_BIN}" - <<PYEOF
-import pymysql, sys
+    DB_USER="${DB_USER}" DB_PASS="${DB_PASS}" "${PY_BIN}" - <<PYEOF
+import pymysql, os, sys
 try:
-    conn = pymysql.connect(host="${DB_HOST}", port=int("${DB_PORT}"),
-                           user="${DB_USER}", password="${DB_PASS}",
+    conn = pymysql.connect(host=os.environ.get("DB_HOST","127.0.0.1"),
+                           port=int(os.environ.get("DB_PORT","3306")),
+                           user=os.environ.get("DB_USER","root"),
+                           password=os.environ.get("DB_PASS",""),
                            charset="utf8mb4")
     with conn.cursor() as c:
         c.execute(f"DROP DATABASE IF EXISTS \`${PLUGIN_NAME}\`;")
