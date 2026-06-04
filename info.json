@@ -26,60 +26,53 @@
     "write to plugin config and logs directory",
     "create MariaDB database sec_mon"
   ],
-  "menu": {
-    "top": {
-      "title": "Security Monitor",
-      "ico": "fa-shield",
-      "url": "index"
+  "menu": [
+    {
+      "title": "Dashboard",
+      "ico": "fa-dashboard",
+      "path": "dashboard"
     },
-    "menu": [
-      {
-        "title": "Dashboard",
-        "ico": "fa-dashboard",
-        "path": "dashboard"
-      },
-      {
-        "title": "Events",
-        "ico": "fa-list",
-        "path": "events"
-      },
-      {
-        "title": "Sessions",
-        "ico": "fa-users",
-        "path": "sessions"
-      },
-      {
-        "title": "Fail2Ban",
-        "ico": "fa-ban",
-        "path": "fail2ban"
-      },
-      {
-        "title": "SSL Certificates",
-        "ico": "fa-lock",
-        "path": "ssl"
-      },
-      {
-        "title": "Services",
-        "ico": "fa-cogs",
-        "path": "services"
-      },
-      {
-        "title": "Analytics",
-        "ico": "fa-line-chart",
-        "path": "analytics"
-      },
-      {
-        "title": "Alerts",
-        "ico": "fa-bell",
-        "path": "alerts"
-      },
-      {
-        "title": "Settings",
-        "ico": "fa-cog",
-        "path": "settings"
-      }
-    ]
-  },
+    {
+      "title": "Events",
+      "ico": "fa-list",
+      "path": "events"
+    },
+    {
+      "title": "Sessions",
+      "ico": "fa-users",
+      "path": "sessions"
+    },
+    {
+      "title": "Fail2Ban",
+      "ico": "fa-ban",
+      "path": "fail2ban"
+    },
+    {
+      "title": "SSL Certificates",
+      "ico": "fa-lock",
+      "path": "ssl"
+    },
+    {
+      "title": "Services",
+      "ico": "fa-cogs",
+      "path": "services"
+    },
+    {
+      "title": "Analytics",
+      "ico": "fa-line-chart",
+      "path": "analytics"
+    },
+    {
+      "title": "Alerts",
+      "ico": "fa-bell",
+      "path": "alerts"
+    },
+    {
+      "title": "Settings",
+      "ico": "fa-cog",
+      "path": "settings"
+    }
+  ],
   "dependencies": {
     "python": [
       "PyMySQL>=1.0.0",
