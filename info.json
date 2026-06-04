@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "SSH authentication, session, Fail2Ban, SSL, and service health monitoring with Telegram/Discord/Email alerts for aaPanel.",
   "author": "Security Monitor Team",
-  "author_email": "ops@thbz,in",
+  "author_email": "ops@example.com",
   "homepage": "https://example.com/sec_mon",
   "help": "https://example.com/sec_mon/docs",
   "checksum": "",

@@ -204,7 +204,6 @@ host = os.environ.get("DB_HOST", "127.0.0.1")
 port = int(os.environ.get("DB_PORT", "3306"))
 user = os.environ.get("DB_USER", "root")
 password = os.environ.get("DB_PASS", "")
-print("DEBUG: connecting as user=" + repr(user) + " host=" + repr(host) + " port=" + str(port) + " pwd_len=" + str(len(password)), file=sys.stderr)
 errors = []
 for attempt in [
     {"host": host, "port": port, "user": user, "password": password},
